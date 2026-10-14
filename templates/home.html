@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero">
+  <h1>DINASED</h1>
+  <p>Control de ingresos y salidas mediante QR, dispositivo autorizado y geocerca.</p>
+  <div class="actions"><a class="button" href="{{ url_for('login') }}">Acceso administrativo</a><a class="button secondary" href="{{ url_for('mark_page') }}">Registrar movimiento</a></div>
+</section>
+<div class="notice"><b>Importante:</b> este prototipo requiere configuración de HTTPS para que el GPS funcione desde celulares en la red local.</div>
+{% endblock %}

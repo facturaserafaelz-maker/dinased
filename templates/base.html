@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ brand }} | Control de Ingresos y Salidas</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand" style="display:flex;align-items:center;gap:10px"><img src="{{ url_for('static', filename='logo.png') }}" alt="DINASED UIPD" height="90" style="width:auto"><span><span class="brand-name">DINASED</span><br><span class="brand-sub">CONTROL DE INGRESOS Y SALIDAS</span></span></div>
+  <nav>
+    {% if session.get('admin') %}
+      <a href="{{ url_for('dashboard') }}">Panel</a>
+      <a href="{{ url_for('users') }}">Usuarios</a>
+      <a href="{{ url_for('events') }}">Movimientos</a>
+      <a href="{{ url_for('admin_settings') }}">Geocerca</a>
+      {% if is_principal %}<a href="{{ url_for('admins') }}">Administradores</a>{% endif %}
+      <a href="{{ url_for('change_password') }}">Contraseña</a>
+      <a href="{{ url_for('logout') }}">Salir</a>
+    {% endif %}
+  </nav>
+</header>
+<main class="container">
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}{% for category,message in messages %}<div class="alert {{ category }}">{{ message }}</div>{% endfor %}{% endif %}
+{% endwith %}
+{% block content %}{% endblock %}
+</main>
+<footer>© OFICINA DE ANALISIS UD Z8</footer>
+<script>
+// Intenta cerrar la ventana. Los navegadores solo lo permiten en ventanas abiertas por script;
+// si no la cierran, se cubre la pantalla con un aviso para que la persona la cierre.
+window.dinasedClose = function (msg, delay) {
+  setTimeout(function () {
+    try { window.close(); } catch (_) {}
+    setTimeout(function () {
+      var d = document.createElement('div');
+      d.setAttribute('role', 'status');
+      d.style.cssText = 'position:fixed;inset:0;z-index:9999;background:#fff;color:#111;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;font:600 1.2rem system-ui,sans-serif';
+      d.textContent = msg || 'Proceso completado. Ya puede cerrar esta ventana.';
+      document.body.appendChild(d);
+    }, 500);
+  }, delay || 0);
+};
+</script>
+</body>
+</html>

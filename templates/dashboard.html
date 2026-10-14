@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="pagehead"><div><p class="eyebrow">PANEL DE CONTROL</p><h1>Bienvenido, {{ session.get('admin') }}</h1><p class="muted">Resumen general de la actividad registrada.</p></div><a class="button secondary" href="{{ url_for('qr_png') }}">Descargar QR fijo</a></div>
+<div class="stats">
+<div class="stat"><span>Usuarios inscritos</span><strong>{{ total }}</strong></div>
+<div class="stat"><span>Pendientes de aprobación</span><strong>{{ pending }}</strong></div>
+<div class="stat"><span>Movimientos de hoy</span><strong>{{ events_today }}</strong></div>
+<div class="stat"><span>Personas que constan dentro</span><strong>{{ inside }}</strong></div>
+</div>
+<div class="card">
+<div class="pagehead"><h2>Últimos movimientos</h2><a href="{{ url_for('events') }}">Ver historial →</a></div>
+<div class="tablewrap"><table><thead><tr><th>Fecha/hora</th><th>Nombre</th><th>Cédula</th><th>Departamento</th><th>Movimiento</th></tr></thead><tbody>
+{% for e in latest %}<tr><td>{{ e.event_time }}</td><td>{{ e.full_name }}</td><td>{{ e.cedula }}</td><td>{{ e.department }}</td><td><span class="pill {{ 'green' if e.event_type=='ENTRADA' else 'blue' }}">{{ e.event_type }}</span></td></tr>{% else %}<tr><td colspan="5">Todavía no existen movimientos.</td></tr>{% endfor %}
+</tbody></table></div>
+</div>
+<div class="grid2">
+<a class="tile" href="{{ url_for('users') }}"><b>Administrar usuarios</b><span>Aprobar inscripciones, bloquear o revocar dispositivos.</span></a>
+<a class="tile" href="{{ url_for('admin_settings') }}"><b>Configurar geocerca</b><span>Modificar coordenadas, radio y precisión GPS.</span></a>
+</div>
+{% endblock %}

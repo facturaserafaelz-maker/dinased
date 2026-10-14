@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="pagehead"><div><p class="eyebrow">CONSULTAS</p><h1>Historial de movimientos</h1></div>
+<div class="actions compact">
+<a class="button secondary" href="{{ url_for('events_export_csv', **qs) }}">Exportar a CSV</a>
+</div></div>
+<div class="card">
+<form method="get" class="search" style="display:flex;flex-wrap:wrap;gap:10px;align-items:end">
+<div style="flex:2 1 220px"><label>Buscar</label><input name="q" value="{{ f.q }}" placeholder="Nombre, cédula, departamento, acompañante o vehículo"></div>
+<div style="flex:1 1 150px"><label>Desde</label><input type="date" name="desde" value="{{ f.desde }}"></div>
+<div style="flex:1 1 150px"><label>Hasta</label><input type="date" name="hasta" value="{{ f.hasta }}"></div>
+<div style="flex:1 1 140px"><label>Movimiento</label><select name="tipo">
+<option value="">Todos</option>
+<option value="ENTRADA" {% if f.tipo=='ENTRADA' %}selected{% endif %}>Ingreso</option>
+<option value="SALIDA" {% if f.tipo=='SALIDA' %}selected{% endif %}>Salida</option></select></div>
+<div style="flex:1 1 200px"><label>Departamento</label><select name="depto">
+<option value="">Todos</option>
+{% for d in departments %}<option value="{{ d }}" {% if f.depto==d %}selected{% endif %}>{{ d }}</option>{% endfor %}</select></div>
+<div style="display:flex;gap:8px"><button class="button">Filtrar</button><a class="button secondary" href="{{ url_for('events') }}">Limpiar</a></div>
+</form>
+<p class="small muted" style="margin:10px 0">{{ events|length }} resultado(s){% if truncated %} (se muestran los 500 más recientes; la exportación incluye todos){% endif %}. Las exportaciones respetan los filtros aplicados.</p>
+<div class="tablewrap"><table><thead><tr><th>Fecha/hora</th><th>Nombre</th><th>Cédula</th><th>Departamento</th><th>Movimiento</th><th>Sale con</th><th>Vehículo</th><th>Ubicación / precisión</th></tr></thead><tbody>
+{% for e in events %}<tr><td>{{ e.event_time }}</td><td>{{ e.full_name }}</td><td>{{ e.cedula }}</td><td>{{ e.department }}</td><td><span class="pill {{ 'green' if e.event_type=='ENTRADA' else 'blue' }}">{{ e.event_type }}</span></td><td>{{ e.companion or '' }}</td><td>{{ e.vehicle or '' }}</td><td>{{ '%.6f'|format(e.latitude) }}, {{ '%.6f'|format(e.longitude) }}<br><span class="muted small">±{{ e.accuracy }} m</span></td></tr>
+{% else %}<tr><td colspan="8">No hay resultados.</td></tr>{% endfor %}
+</tbody></table></div></div>
+{% endblock %}

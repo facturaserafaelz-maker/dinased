@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="narrow card">
+<p class="eyebrow">CONFIGURACIÓN</p><h1>Geocerca y registro</h1>
+<p class="muted">Use las coordenadas del punto autorizado. Confirme los valores antes de guardar.</p>
+<form method="post">
+<label>Nombre del lugar</label><input name="place_name" value="{{ s.place_name }}" required>
+<label>Latitud</label><input type="number" step="any" name="latitude" value="{{ s.latitude }}" required>
+<label>Longitud</label><input type="number" step="any" name="longitude" value="{{ s.longitude }}" required>
+<label>Radio autorizado (metros, 10–5000)</label><input type="number" min="10" max="5000" step="1" name="radius_m" value="{{ s.radius_m }}" required>
+<label>Precisión GPS máxima aceptada (metros, 10–500)</label><input type="number" min="10" max="500" step="1" name="max_accuracy_m" value="{{ s.max_accuracy_m }}" required>
+<label class="check"><input type="checkbox" name="registration_open" {% if s.registration_open == '1' %}checked{% endif %}> Permitir nuevas solicitudes de inscripción</label>
+<button class="button full">Guardar configuración</button>
+</form>
+<div class="notice">Cada cambio se registra en la auditoría. La precisión GPS indicada es un umbral de calidad, no una garantía contra ubicación manipulada.</div>
+</div>
+{% endblock %}

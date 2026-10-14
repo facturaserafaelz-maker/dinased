@@ -1,0 +1,14 @@
+# Datos y secretos: NUNCA subir a GitHub
+dinased.db
+dinased.db-*
+*.db
+.dinased_secret
+.env
+*.pem
+*.key
+
+# Python
+venv/
+.venv/
+__pycache__/
+*.pyc

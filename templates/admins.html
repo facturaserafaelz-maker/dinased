@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="pagehead"><div><p class="eyebrow">SEGURIDAD</p><h1>Administradores</h1><p class="muted">Cada persona debe tener su propia cuenta.</p></div><a class="button secondary" href="{{ url_for('change_password') }}">Cambiar mi contraseña</a></div>
+<div class="grid2 align-start">
+<div class="card"><h2>Crear subadministrador</h2><form method="post">
+<label>Nombre de usuario (3 a 50 caracteres)</label><input name="username" required minlength="3" maxlength="50" autocomplete="off">
+<label>Contraseña (mínimo 12 caracteres)</label><input type="password" name="password" required minlength="12" autocomplete="new-password">
+<button class="button full">Crear subadministrador</button></form>
+<p class="small muted">No comparta una sola cuenta entre varias personas.</p></div>
+<div class="card"><h2>Administradores existentes</h2>
+<div class="tablewrap"><table><thead><tr><th>Usuario</th><th>Rol</th><th>Creado</th><th></th></tr></thead><tbody>
+{% for a in admins %}<tr><td><b>{{ a.username }}</b></td>
+<td><span class="pill {{ 'green' if a.role == 'admin' else 'blue' }}">{{ 'Principal' if a.role == 'admin' else 'Sub' }}</span></td>
+<td class="muted small">{{ a.created_at[:10] }}</td>
+<td>{% if a.role != 'admin' %}<form method="post" action="{{ url_for('delete_admin', admin_id=a.id) }}" onsubmit="return confirm('¿Eliminar a este subadministrador?');"><button class="mini danger">Eliminar</button></form>{% endif %}</td></tr>
+{% endfor %}</tbody></table></div></div>
+</div>
+{% endblock %}

@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="narrow card" id="scanCard">
+<p class="eyebrow">ACCESO POR QR</p><h1>DINASED</h1>
+<p class="muted" id="scanMsg">Ingrese su cédula para continuar. Si es su primera vez, podrá solicitar la inscripción; si ya está registrado, se iniciará la marcación.</p>
+<label>Número de cédula</label><input id="cedula" inputmode="numeric" maxlength="10" placeholder="10 dígitos">
+<button class="button full" id="continueBtn">Continuar</button><div id="result" class="result" role="status"></div>
+</div>
+<script>
+// Si este celular ya fue vinculado, pasa directo a la marcación (sin pedir la cédula).
+(async()=>{
+  try {
+    const db = await new Promise((res,rej)=>{ const r=indexedDB.open("dinased-device",1);
+      r.onupgradeneeded=()=>{ if(!r.result.objectStoreNames.contains("keys")) r.result.createObjectStore("keys"); };
+      r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); });
+    const get = k => new Promise((res,rej)=>{ const q=db.transaction("keys","readonly").objectStore("keys").get(k); q.onsuccess=()=>res(q.result); q.onerror=()=>rej(q.error); });
+    const [ced, key] = await Promise.all([get("cedula"), get("privateKey")]);
+    if (key && /^[0-9]{10}$/.test(ced || "")) location.replace('/mark');
+  } catch(_) {}
+})();
+document.getElementById('continueBtn').addEventListener('click', async()=>{
+ const cedula=document.getElementById('cedula').value.trim(), result=document.getElementById('result');
+ result.textContent='Verificando…';
+ try {
+  const resp=await fetch('/api/lookup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cedula})});
+  const data=await resp.json();
+  if(!resp.ok) throw new Error(data.message||'No se pudo validar.');
+  if(data.next==='register') location.href='/register';
+  else location.href='/mark?cedula='+encodeURIComponent(cedula);
+ } catch(e) { result.className='result bad'; result.textContent=e.message||'Ocurrió un error.'; }
+});
+</script>
+{% endblock %}

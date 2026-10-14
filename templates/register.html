@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="narrow card">
+<p class="eyebrow">INSCRIPCIÓN DE PERSONAL</p><h1>DINASED</h1>
+<p class="muted">Complete los datos solicitados. La inscripción requiere aprobación administrativa.</p>
+{% if not closed %}
+<form id="regForm" method="post">
+<label>APELLIDOS Y NOMBRES</label><input name="full_name" required maxlength="150" autocomplete="name">
+<label>NÚMERO DE CELULAR</label><input name="phone" required inputmode="tel" maxlength="25" autocomplete="tel">
+<label>NÚMERO DE CÉDULA</label><input name="cedula" required inputmode="numeric" pattern="[0-9]{10}" maxlength="10">
+<label>UNIDAD O DEPARTAMENTO</label><select name="department" required><option value="">Seleccione...</option><option>Desaparición Forzada</option><option>Desaparición Involuntaria</option></select>
+<div class="devicebox"><b>Vinculación criptográfica del dispositivo</b><p id="deviceStatus" class="muted">Pulse el botón para preparar la credencial de este celular.</p><button type="button" id="bindBtn" class="button secondary full">Vincular este celular</button></div>
+<input type="hidden" name="public_key" id="public_key">
+<button class="button full" id="submitBtn" disabled>Enviar solicitud de inscripción</button>
+</form>
+<script>
+const enc = new TextEncoder();
+function b64u(buf) { return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); }
+document.getElementById('bindBtn').addEventListener('click', async () => {
+  const status = document.getElementById('deviceStatus');
+  try {
+    if (!window.crypto || !crypto.subtle || !window.isSecureContext) throw new Error("El navegador requiere una conexión segura HTTPS para crear la credencial. Consulte al administrador.");
+    const pair = await crypto.subtle.generateKey({name:"ECDSA", namedCurve:"P-256"}, false, ["sign","verify"]);
+    const pub = await crypto.subtle.exportKey("spki", pair.publicKey);
+    // La clave privada no exportable se conserva en IndexedDB mediante structured clone.
+    const dbReq = indexedDB.open("dinased-device", 1);
+    dbReq.onupgradeneeded = () => dbReq.result.createObjectStore("keys");
+    dbReq.onsuccess = () => {
+      const idb = dbReq.result;
+      const tx = idb.transaction("keys","readwrite");
+      tx.objectStore("keys").put(pair.privateKey, "pendingPrivateKey");
+      tx.objectStore("keys").put(pair.publicKey, "pendingPublicKey");
+      tx.oncomplete = () => {
+        document.getElementById('public_key').value = b64u(pub);
+        document.getElementById('submitBtn').disabled = false;
+        status.textContent = "Dispositivo preparado. Envíe la solicitud para que el administrador la apruebe.";
+      };
+    };
+    dbReq.onerror = () => { status.textContent = "No se pudo guardar la credencial en este navegador."; };
+  } catch (e) { status.textContent = e.message || "No se pudo vincular el dispositivo."; }
+});
+// Al enviar, se guarda la cédula en este celular para reconocerlo en los siguientes escaneos.
+document.getElementById('regForm').addEventListener('submit', (ev) => {
+  ev.preventDefault();
+  const form = ev.target;
+  const cedula = form.elements['cedula'].value.trim();
+  const done = () => form.submit();
+  const req = indexedDB.open("dinased-device", 1);
+  req.onupgradeneeded = () => { if (!req.result.objectStoreNames.contains("keys")) req.result.createObjectStore("keys"); };
+  req.onsuccess = () => {
+    const tx = req.result.transaction("keys", "readwrite");
+    tx.objectStore("keys").put(cedula, "pendingCedula");
+    tx.oncomplete = done; tx.onerror = done;
+  };
+  req.onerror = done;
+});
+
+// Si el servidor aceptó la solicitud (?ok=1), la credencial pendiente pasa a ser la activa.
+if (new URLSearchParams(location.search).get('ok') === '1') {
+  const r = indexedDB.open("dinased-device", 1);
+  r.onupgradeneeded = () => { if (!r.result.objectStoreNames.contains("keys")) r.result.createObjectStore("keys"); };
+  r.onsuccess = () => {
+    const db = r.result, got = {}, names = ["pendingPrivateKey","pendingPublicKey","pendingCedula"];
+    const rd = db.transaction("keys","readonly").objectStore("keys");
+    names.forEach(k => { const q = rd.get(k); q.onsuccess = () => { got[k] = q.result; }; });
+    const finish = () => window.dinasedClose("Solicitud enviada. Ya puede cerrar esta ventana.", 2500);
+    rd.transaction.oncomplete = () => {
+      if (!got.pendingPrivateKey || !got.pendingCedula) { finish(); return; }
+      const wtx = db.transaction("keys","readwrite");
+      const st = wtx.objectStore("keys");
+      st.put(got.pendingPrivateKey, "privateKey");
+      if (got.pendingPublicKey) st.put(got.pendingPublicKey, "publicKey");
+      st.put(got.pendingCedula, "cedula");
+      names.forEach(k => st.delete(k));
+      wtx.oncomplete = finish; wtx.onerror = finish;
+    };
+  };
+}
+</script>
+{% else %}<p>La inscripción está cerrada.</p>{% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.choices{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0}
+.choice{padding:20px 8px;font-size:1.1rem;cursor:pointer}
+.choice[aria-pressed="true"]{outline:3px solid #1f6feb;outline-offset:2px}
+.choice[aria-pressed="false"]{opacity:.7}
+.hidden{display:none}
+</style>
+<div class="narrow card">
+<p class="eyebrow">MARCACIÓN</p><h1>Registrar ingreso o salida</h1>
+<p id="intro" class="muted">Verificando este dispositivo…</p>
+
+<div id="manual" class="hidden">
+<label>Número de cédula</label><input id="cedula" inputmode="numeric" maxlength="10" value="{{ cedula }}" placeholder="10 dígitos">
+<button type="button" class="button full" id="verifyBtn">Continuar</button>
+</div>
+
+<div id="known" class="hidden">
+<p><b id="who"></b></p>
+<p class="small muted">Seleccione el tipo de movimiento y pulse Enviar.</p>
+<div class="choices">
+<button type="button" class="button choice" data-type="ENTRADA" aria-pressed="false">Ingreso</button>
+<button type="button" class="button secondary choice" data-type="SALIDA" aria-pressed="false">Salida</button>
+</div>
+<div id="companionBox" class="hidden">
+<label for="companion">¿Con quién sale?</label>
+<input id="companion" maxlength="150" autocomplete="off" placeholder="Nombre de la persona (o «Solo»)">
+<label for="vehicle" style="margin-top:10px;display:block">Vehículo</label>
+<input id="vehicle" maxlength="100" autocomplete="off" placeholder="Placa o tipo de vehículo (o «Ninguno»)">
+</div>
+<button type="button" class="button full" id="sendBtn" disabled>Enviar</button>
+</div>
+
+<div id="result" class="result" role="status"></div>
+<p class="small muted" style="margin-top:16px">En caso de haber cambiado de dispositivo, comuníquese con el administrador.</p>
+</div>
+<script>
+const encoder = new TextEncoder();
+function b64u(buf) { return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); }
+function openDb(){ return new Promise((res,rej)=>{ const r=indexedDB.open("dinased-device",1);
+  r.onupgradeneeded=()=>{ if(!r.result.objectStoreNames.contains("keys")) r.result.createObjectStore("keys"); };
+  r.onsuccess=()=>res(r.result); r.onerror=()=>rej(new Error("No se pudo leer la credencial del dispositivo.")); }); }
+async function idbGet(k){ const db=await openDb(); return new Promise((res,rej)=>{ const q=db.transaction("keys","readonly").objectStore("keys").get(k); q.onsuccess=()=>res(q.result); q.onerror=()=>rej(q.error); }); }
+async function idbPut(k,v){ const db=await openDb(); return new Promise((res,rej)=>{ const tx=db.transaction("keys","readwrite"); tx.objectStore("keys").put(v,k); tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error); }); }
+
+const $=id=>document.getElementById(id);
+const result=$('result');
+let currentCedula=null, chosen=null, sending=false;
+
+function showError(msg){ result.className="result bad"; result.textContent=msg; }
+function clearResult(){ result.className="result"; result.textContent=""; }
+
+async function identify(cedula){
+  clearResult();
+  const resp=await fetch('/api/lookup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cedula})});
+  const data=await resp.json();
+  if(!resp.ok) throw new Error(data.message||"No se pudo validar.");
+  if(data.next==='register'){ location.href='/register'; return false; }
+  currentCedula=cedula;
+  $('manual').classList.add('hidden');
+  $('known').classList.remove('hidden');
+  $('intro').textContent="Dispositivo reconocido.";
+  $('who').textContent=data.name ? ("Usuario: "+data.name) : "Usuario identificado";
+  return true;
+}
+
+document.querySelectorAll('.choice').forEach(b=>b.addEventListener('click',()=>{
+  chosen=b.dataset.type;
+  document.querySelectorAll('.choice').forEach(x=>x.setAttribute('aria-pressed', x===b ? 'true':'false'));
+  $('companionBox').classList.toggle('hidden', chosen!=='SALIDA');
+  if(chosen==='SALIDA') $('companion').focus();
+  $('sendBtn').disabled=false;
+}));
+
+$('verifyBtn').addEventListener('click', async()=>{
+  const c=$('cedula').value.trim();
+  if(!/^[0-9]{10}$/.test(c)){ showError("Ingrese una cédula de 10 dígitos."); return; }
+  try { await identify(c); } catch(e){ showError(e.message||"Ocurrió un error."); }
+});
+
+$('sendBtn').addEventListener('click', async()=>{
+  if(sending || !chosen || !currentCedula) return;
+  const companion=$('companion').value.trim();
+  if(chosen==='SALIDA' && !companion){ showError("Indique con quién sale (escriba «Solo» si sale sin acompañante)."); $('companion').focus(); return; }
+  const vehicle=$('vehicle').value.trim();
+  if(chosen==='SALIDA' && !vehicle){ showError("Indique el vehículo (escriba «Ninguno» si no usa vehículo)."); $('vehicle').focus(); return; }
+  sending=true; $('sendBtn').disabled=true; result.className="result"; result.textContent="Validando…";
+  try {
+    if(!window.isSecureContext || !navigator.geolocation || !crypto.subtle) throw new Error("Esta función requiere HTTPS y ubicación activada.");
+    const key=await idbGet("privateKey"); if(!key) throw new Error("Este celular no tiene la clave vinculada.");
+    const chResp=await fetch('/api/challenge',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cedula:currentCedula})});
+    const ch=await chResp.json(); if(!chResp.ok) throw new Error(ch.message || "No autorizado.");
+    const msg=`${ch.token}|${ch.user_id}|DINASED-MARCACION-V1`;
+    const sig=await crypto.subtle.sign({name:"ECDSA",hash:"SHA-256"},key,encoder.encode(msg));
+    const pos=await new Promise((resolve,reject)=>navigator.geolocation.getCurrentPosition(resolve,reject,{enableHighAccuracy:true,timeout:20000,maximumAge:0}));
+    const body={token:ch.token,signature:b64u(sig),latitude:pos.coords.latitude,longitude:pos.coords.longitude,accuracy:pos.coords.accuracy,event_type:chosen,companion:(chosen==='SALIDA'?companion:''),vehicle:(chosen==='SALIDA'?vehicle:'')};
+    const resp=await fetch('/api/mark',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const data=await resp.json(); if(!resp.ok) throw new Error(data.message || "No se pudo registrar.");
+    try { await idbPut("cedula", currentCedula); } catch(_){}
+    result.className="result good"; result.textContent=data.message;
+    // Queda bloqueado (sending=true) y se cierra la ventana.
+    $('sendBtn').disabled=true;
+    window.dinasedClose(data.message+" Ya puede cerrar esta ventana.", 1500);
+  } catch(e){
+    showError(e.message || "Ocurrió un error.");
+    sending=false; $('sendBtn').disabled=false;
+  }
+});
+
+(async()=>{
+  try {
+    let stored=null;
+    try { stored=await idbGet("cedula"); } catch(_){}
+    const hasKey = !!(await idbGet("privateKey").catch(()=>null));
+    const fromUrl=$('cedula').value.trim();
+    const cedula = (hasKey && /^[0-9]{10}$/.test(stored||"")) ? stored : null;
+    if(cedula){ if(await identify(cedula)) return; return; }
+    $('intro').textContent = hasKey
+      ? "Ingrese su cédula una sola vez; luego este celular será reconocido automáticamente."
+      : "Este celular no tiene credencial vinculada. Si aún no se ha inscrito, hágalo desde el formulario de inscripción.";
+    $('manual').classList.remove('hidden');
+    if(/^[0-9]{10}$/.test(fromUrl) && hasKey) $('verifyBtn').click();
+  } catch(e){
+    $('intro').textContent="";
+    $('manual').classList.remove('hidden');
+    showError(e.message||"Ocurrió un error.");
+  }
+})();
+</script>
+{% endblock %}
